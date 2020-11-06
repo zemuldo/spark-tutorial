@@ -1,0 +1,577 @@
+# Prequisites
+- [GitHub Repo]([GitHub repo](https://github.com/zemuldo/spark-tutorial))
+# What is Spark?
+[Spark](https://spark.apache.org/) is a unified analytics engine for large-scale data processing. With the emergence of planet-scale big data from different sectors of human daily digital footprints, tools like Spark have emerged to make the data easily loadable, transformable, and queryable among other tasks
+
+Spark supports different languages including Java, Python, R, Scala, etc. For this, I will use the Python PySpark library. All my examples will be in Python.
+
+#### Installing Spark and PySpark
+For installing PySpark, I used the [tutorial here](https://medium.com/swlh/pyspark-on-macos-installation-and-use-31f84ca61400) to set up Spark on Mac OSX. For other platforms like Linux, you can try [this one](https://medium.com/tinghaochen/how-to-install-pyspark-locally-94501eefe421)
+
+At the end of installation, you should be able to issue the `pyspark` command in your terminal and start a Jupiter session and open a browser where you can create notebooks.
+```
+~/Code/learning/spark:- pyspark                                                                                                                                                    ─╯
+[I 20:38:31.625 NotebookApp] JupyterLab extension loaded from /Users/iam/opt/anaconda3/lib/python3.8/site-packages/jupyterlab
+[I 20:38:31.625 NotebookApp] JupyterLab application directory is /Users/iam/opt/anaconda3/share/jupyter/lab
+[I 20:38:31.628 NotebookApp] Serving notebooks from local directory: /Volumes/Code/learning/spark
+[I 20:38:31.628 NotebookApp] The Jupyter Notebook is running at:
+[I 20:38:31.628 NotebookApp] http://localhost:8888/?token=ddaa7bad24bf21d32b35dcc5260df6152badc4caf698f022
+[I 20:38:31.628 NotebookApp]  or http://127.0.0.1:8888/?token=ddaa7bad24bf21d32b35dcc5260df6152badc4caf698f022
+[I 20:38:31.628 NotebookApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+```
+
+For ease of setup, you can clone the [repository](https://github.com/zemuldo/spark-tutorial) and start your shell at its root then start pyspark from there. This way all the notebooks here will work out of the box without modification unless you are on a future version of the PySpark stack. This will also save you time from downloading the dataset.
+# Data Sources
+You can load data into spark from different sources. The ones we will look at here are:
+
+- `JSON` file
+-  `CSV` file
+-  JDBC Connection.
+
+# Spark Data Formats
+Spark supports different data structures into which we can load our data, mainly three.
+- DataFrame
+- RDD
+- DataSet
+There is a good [comparison here](https://medium.com/analytics-vidhya/datasets-vs-dataframes-vs-rdds-d3c2dba2d0b4) between them with details on performance and features. For this post, I will focus on DataFrame in my examples.
+
+# Sample Datasets
+I have added some datasets here downloaded from Kaggle. These are the ones I will use throughout the tutorial.
+- [Covid 19 Report Dataset - Source Kaggle](https://www.kaggle.com/imdevskp/corona-virus-report)
+- [World Population Dataset - Source Kaggle](https://www.kaggle.com/tanuprabhu/population-by-country-2020) (I changed some fields)
+- [Cities Population Dataset - Source Kaggle](https://www.kaggle.com/viswanathanc/world-cities-datasets)
+
+Download the datasets from the [GitHub repo](https://github.com/zemuldo/spark-tutorial) for this tutorial. You can also use the provided Kaggle links to download the files. As for the populations dataset, I made a few changes.
+# Loading Data Into Spark
+Let us see how to load data of different formats into a spark dataframe that we can then interact with as we desire.
+## Loading CSV Data
+Let us now load our sample data into spark. I will start with the Covid-19 CSV Data.
+To load CSV file into Spark, we just give pyspark `load` function the path to the file.
+```python
+import pyspark
+from pyspark import SQLContext
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+
+df.printSchema()
+"""
+root
+ |-- Country/Region: string (nullable = true)
+ |-- Confirmed: string (nullable = true)
+ |-- Deaths: string (nullable = true)
+ |-- Recovered: string (nullable = true)
+ |-- Active: string (nullable = true)
+ |-- New cases: string (nullable = true)
+ |-- New deaths: string (nullable = true)
+ |-- New recovered: string (nullable = true)
+ |-- Deaths / 100 Cases: string (nullable = true)
+ |-- Recovered / 100 Cases: string (nullable = true)
+ |-- Deaths / 100 Recovered: string (nullable = true)
+ |-- Confirmed last week: string (nullable = true)
+ |-- 1 week change: string (nullable = true)
+ |-- 1 week % increase: string (nullable = true)
+ |-- WHO Region: string (nullable = true)
+"""
+df.show()
+"""
+ +--------------+---------+------+---------+------+---------+----------+-------------+------------------+---------------------+----------------------+-------------------+-------------+-----------------+--------------------+
+|Country/Region|Confirmed|Deaths|Recovered|Active|New cases|New deaths|New recovered|Deaths / 100 Cases|Recovered / 100 Cases|Deaths / 100 Recovered|Confirmed last week|1 week change|1 week % increase|          WHO Region|
++--------------+---------+------+---------+------+---------+----------+-------------+------------------+---------------------+----------------------+-------------------+-------------+-----------------+--------------------+
+|   Afghanistan|    36263|  1269|    25198|  9796|      106|        10|           18|               3.5|                69.49|                  5.04|              35526|          737|             2.07|Eastern Mediterra...|
+|       Albania|     4880|   144|     2745|  1991|      117|         6|           63|              2.95|                56.25|                  5.25|               4171|          709|             17.0|              Europe|
+|       Algeria|    27973|  1163|    18837|  7973|      616|         8|          749|              4.16|                67.34|                  6.17|              23691|         4282|            18.07|              Africa|
++--------------+---------+------+---------+------+---------+----------+-------------+------------------+---------------------+----------------------+-------------------+-------------+-----------------+--------------------+
+"""
+```
+
+## Loading JSON Data
+Let us now load the world population JSON data.
+To load a JSON file into Spark, we just give pyspark `load` function the path to the file. For JSON data we have to define a schema to target.
+```python
+import pyspark.sql.types as Types
+from pyspark.sql import SparkSession
+
+
+spark = SparkSession.builder \
+    .appName(appName) \
+    .master(master) \
+    .getOrCreate()
+
+
+schema = Types.StructType([
+    Types.StructField('Country/Region', Types.StringType(), True),
+    Types.StructField('Population', Types.StringType(), True),
+    Types.StructField('Urban Pop %', Types.StringType(), True),
+    Types.StructField('World Share %', Types.StringType(), True),
+    Types.StructField('Med. Age', Types.StringType(), True)
+])
+
+
+df = spark\
+    .read\
+    .json("world_population/population.json", schema, multiLine=True)
+"""
+root
+ |-- Country/Region: string (nullable = true)
+ |-- Population: string (nullable = true)
+ |-- Urban Pop %: string (nullable = true)
+ |-- World Share %: string (nullable = true)
+ |-- Med. Age: string (nullable = true)
+"""
+df.limit(3).show()
+"""
++--------------+----------+-----------+-------------+--------+
+|Country/Region|Population|Urban Pop %|World Share %|Med. Age|
++--------------+----------+-----------+-------------+--------+
+|         China|1440297825|         61|        18.47|      38|
+|         India|1382345085|         35|        17.70|      28|
+| United States| 331341050|         83|         4.25|      38|
++--------------+----------+-----------+-------------+--------+
+
+"""
+```
+
+
+## Loading Data from a DBMS (PostgreSQL)
+For this, you will need to download the sample database from [this link](https://www.postgresqltutorial.com/postgresql-sample-database/) and load into your PostgreSQL instance.
+
+First, download a version of the JDBC driver from [here](https://jdbc.postgresql.org/download.html) that spark will use to connect to the PostgreSQL instance. Place the jar file in a suitable location then start spark with the option below that matches the driver version you have downloaded.
+
+Note that you may have connection issues and may end up having to do some digging to get it to work.
+```
+pyspark --packages org.postgresql:postgresql:42.2.16
+```
+
+After this just go ahead and open a new notebook and create a new DataFrame. Here I am creating a new DF from table `payment` in the database named `dvdrental`.
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession \
+    .builder \
+    .appName("Python Spark SQL basic example") \
+    .config("spark.jars", "jars/postgresql-42.2.16.jar") \
+    .getOrCreate()
+
+df = spark.read \
+    .format("jdbc") \
+    .option("url", "jdbc:postgresql://localhost:5432/dvdrental") \
+    .option("dbtable", "payment") \
+    .option("user", "postgres") \
+    .option("password", "postgres") \
+    .option("driver", "org.postgresql.Driver") \
+    .load()
+
+df.printSchema()
+"""
+root
+ |-- payment_id: integer (nullable = true)
+ |-- customer_id: short (nullable = true)
+ |-- staff_id: short (nullable = true)
+ |-- rental_id: integer (nullable = true)
+ |-- amount: decimal(5,2) (nullable = true)
+ |-- payment_date: timestamp (nullable = true)
+"""
+```
+
+## Select, Limit, Show
+You use `select` the desired columns, it takes one column or a list of columns. You can also `limit` the number of rows to fetch. `Show` function prints the columns to console.
+You can select a single column or a list of columns. Select can also be used to select nested columns as seen in TODO: from_json section.
+
+```python
+import pyspark
+from pyspark import SQLContext
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+df.select("Country/Region").limit(3).show()
+"""
++--------------+
+|Country/Region|
++--------------+
+|   Afghanistan|
+|       Albania|
+|       Algeria|
++--------------+
+"""
+df.select(["Country/Region", "Deaths", "Recovered"]).limit(3).show()
+"""
++--------------+------+---------+
+|Country/Region|Deaths|Recovered|
++--------------+------+---------+
+|   Afghanistan|  1269|    25198|
+|       Albania|   144|     2745|
+|       Algeria|  1163|    18837|
++--------------+------+---------+
+"""
+```
+## Where, Filter
+You can use where or filter functions to apply conditions to get a desired state of the DataFrame.
+```python
+import pyspark
+import pyspark.sql.functions as F
+from pyspark import SQLContext
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+
+deathsG30k = df.where(F.col("Deaths") > 30000)
+deathsG30k.select(["Country/Region", "Deaths"]).show()
+"""
++--------------+------+
+|Country/Region|Deaths|
++--------------+------+
+|        Brazil| 87618|
+|        France| 30212|
+|         India| 33408|
+|         Italy| 35112|
+|        Mexico| 44022|
+|            US|148011|
+|United Kingdom| 45844|
++--------------+------+
+"""
+deathsG30kAndInEurope = deathsG30k.filter(F.col("WHO Region") == "Europe")
+deathsG30kAndInEurope.select(["Country/Region", "Deaths"]).show()
+"""
++--------------+------+
+|Country/Region|Deaths|
++--------------+------+
+|        France| 30212|
+|         Italy| 35112|
+|United Kingdom| 45844|
++--------------+------+
+"""
+```
+## Casting, Renaming
+Casting is used to change the data type of a field.
+```python
+import pyspark
+import pyspark.sql.functions as F
+from pyspark import SQLContext
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+
+df.printSchema()
+"""
+root
+ |-- Country/Region: string (nullable = true)
+ |-- Confirmed: string (nullable = true)
+ |-- Deaths: string (nullable = true)
+ |-- Recovered: string (nullable = true)
+...
+"""
+df = df.withColumn("Deaths", F.col("Deaths").cast('int'))
+
+df.printSchema()
+"""
+root
+ |-- Country/Region: string (nullable = true)
+ |-- Confirmed: string (nullable = true)
+ |-- Deaths: integer (nullable = true)
+ |-- Recovered: string (nullable = true)
+...
+"""
+df = df.withColumnRenamed("Recovered", "Recoveries")
+
+df.printSchema()
+"""
+root
+ |-- Country/Region: string (nullable = true)
+ |-- Confirmed: string (nullable = true)
+ |-- Deaths: integer (nullable = true)
+ |-- Recoveries: string (nullable = true)
+...
+"""
+```
+
+## Order, Sort
+You can `sort` a DataFrame by any column and the rules are just as they apply in SQL.
+```python
+import pyspark
+import pyspark.sql.types as Types
+from pyspark import SQLContext
+from pyspark.sql import SparkSession
+
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+
+
+spark = SparkSession.builder \
+    .appName(appName) \
+    .master(master) \
+    .getOrCreate()
+
+
+schema = Types.StructType([
+    Types.StructField('Country/Region', Types.StringType(), True),
+    Types.StructField('Population', Types.StringType(), True),
+    Types.StructField('Urban Pop %', Types.StringType(), True),
+    Types.StructField('World Share %', Types.StringType(), True),
+    Types.StructField('Med. Age', Types.StringType(), True)
+])
+
+
+df = spark\
+    .read\
+    .json("world_population/population.json", schema, multiLine=True)
+
+df.orderBy(df['Population'].cast("int").desc()).limit(4).show()
+df.sort(df['Population'].cast("int").desc()).limit(4).show()
+"""
++--------------+----------+-----------+-------------+--------+
+|Country/Region|Population|Urban Pop %|World Share %|Med. Age|
++--------------+----------+-----------+-------------+--------+
+|         China|1440297825|         61|        18.47|      38|
+|         India|1382345085|         35|        17.70|      28|
+| United States| 331341050|         83|         4.25|      38|
+|     Indonesia| 274021604|         56|         3.51|      30|
++--------------+----------+-----------+-------------+--------+
+"""
+df.orderBy(df['Population'].cast("int").asc()).limit(4).show()
+df.sort(df['Population'].cast("int").asc()).limit(4).show()
+"""
++----------------+----------+-----------+-------------+--------+
+|  Country/Region|Population|Urban Pop %|World Share %|Med. Age|
++----------------+----------+-----------+-------------+--------+
+|        Holy See|       801|       N.A.|         0.00|    N.A.|
+|         Tokelau|      1360|          0|         0.00|    N.A.|
+|            Niue|      1628|         46|         0.00|    N.A.|
+|Falkland Islands|      3497|         66|         0.00|    N.A.|
++----------------+----------+-----------+-------------+--------+
+"""
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("world_population/worldcities.csv"))
+
+df = df.where(df['population'].cast("int") > 10000000)
+
+df.orderBy(df['country'].desc(), df['population'].cast("int").desc()).limit(6)\
+  .select(["city", "country", "population"]).show()
+"""
++-----------+-------------+----------+
+|       city|      country|population|
++-----------+-------------+----------+
+|   New York|United States|19354922.0|
+|Los Angeles|United States|12815475.0|
+|   Istanbul|       Turkey|  10061000|
+|     Moscow|       Russia|  10452000|
+|     Manila|  Philippines|  11100000|
+|    Karachi|     Pakistan|  12130000|
++-----------+-------------+----------+
+"""
+df.sort(df['country'].desc(), df['population'].cast("int").asc()).limit(6)\
+  .select(["city", "country", "population"]).show()
+"""
++-----------+-------------+----------+
+|       city|      country|population|
++-----------+-------------+----------+
+|Los Angeles|United States|12815475.0|
+|   New York|United States|19354922.0|
+|   Istanbul|       Turkey|  10061000|
+|     Moscow|       Russia|  10452000|
+|     Manila|  Philippines|  11100000|
+|    Karachi|     Pakistan|  12130000|
++-----------+-------------+----------+
+"""
+```
+
+As you can see, you can sort by many fields where ties in previous sort are sorted by the next field and so on. You can also chain sorts because both `Sort` and `OrderBy` functions both return data frames
+## Joins
+Joining works just like SQL. Lets join the covid data and the populations data using Country/Region name.
+```python
+import pyspark
+from pyspark import SQLContext
+import pyspark.sql.functions as F
+import pyspark.sql.types as Types
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+covid19Df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+
+
+schema = Types.StructType([
+    Types.StructField('Country/Region', Types.StringType(), True),
+    Types.StructField('Population', Types.StringType(), True),
+    Types.StructField('Urban Pop %', Types.StringType(), True),
+    Types.StructField('World Share %', Types.StringType(), True),
+    Types.StructField('Med. Age', Types.StringType(), True)
+])
+
+
+populationsDf = spark\
+    .read\
+    .json("world_population/population.json", schema, multiLine=True)\
+    .withColumnRenamed("Country/Region", "CountryName")
+
+joinedDf = populationsDf\
+  .join(covid19Df, (populationsDf.CountryName == covid19Df["Country/Region"]))
+
+joinedDf\
+  .select(["CountryName" ,"Population", "Urban Pop %", "Confirmed", "Recovered", "Deaths"])\
+  .sort(F.col("Confirmed").cast("int").desc())\
+  .limit(5)\
+  .show()
+"""
++-------------+----------+-----------+---------+---------+------+
+|  CountryName|Population|Urban Pop %|Confirmed|Recovered|Deaths|
++-------------+----------+-----------+---------+---------+------+
+|United States| 331341050|         83|  4290259|  1325804|148011|
+|       Brazil| 212821986|         88|  2442375|  1846641| 87618|
+|        India|1382345085|         35|  1480073|   951166| 33408|
+|       Russia| 145945524|         74|   816680|   602249| 13334|
+| South Africa|  59436725|         67|   452529|   274925|  7067|
++-------------+----------+-----------+---------+---------+------+
+"""
+```
+
+You can also join by multiple columns by having two logical operations.
+## Count
+Just like in SQL, Spark DataFrames have a count function that returns the number of row.
+```python
+import pyspark
+from pyspark import SQLContext
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("covid_dataset/country_wise_latest.csv"))
+
+df.count() #187
+df = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("world_population/worldcities.csv"))
+df.count() # 15493
+```
+## Grouping and Aggregates
+For grouping we use `groupBy` function. You Can group data in Spark and perform common aggregates like the ones listed below:
+- Count the rows for each group.
+- Find mean of values for each group.
+- Find maximum of values for each group.
+- Find minimum of values for each group.
+- Find total for values for each group.
+- Find average for values for each group.
+
+Each of the above operations are available as function on the grouped data.
+
+The result from  `groupBy` function also has `agg` function that allows multiple aggregates with aliasing.
+
+Here is a complete notebook with some groupings.
+```python
+import pyspark
+from pyspark import SQLContext
+import pyspark.sql.functions as F
+import pyspark.sql.types as Types
+sc = SparkContext.getOrCreate();
+sql = SQLContext(sc)
+
+citiesPopDf = (sql.read
+         .format("com.databricks.spark.csv")
+         .option("header", "true")
+         .load("world_population/worldcities.csv"))\
+         .withColumnRenamed("Population", "city_population")\
+         .where(F.col("city_population").cast("int") > 0)
+
+schema = Types.StructType([
+    Types.StructField('Country/Region', Types.StringType(), True),
+    Types.StructField('Population', Types.StringType(), True),
+    Types.StructField('Urban Pop %', Types.StringType(), True),
+    Types.StructField('World Share %', Types.StringType(), True),
+    Types.StructField('Med. Age', Types.StringType(), True)
+])
+
+countriesPopDf = spark\
+    .read\
+    .json("world_population/population.json", schema, multiLine=True)\
+    .withColumnRenamed("Population", "country_population")
+
+joinedDf = citiesPopDf\
+   .join(countriesPopDf, (citiesPopDf.country == countriesPopDf["Country/Region"]))
+
+joinedDf\
+    .groupBy("country")\
+    .count().sort(F.col("count").desc())\
+    .limit(5)\
+    .show()
+"""
++-------------+-----+
+|      country|count|
++-------------+-----+
+|United States| 7328|
+|       Russia|  564|
+|        China|  392|
+|       Brazil|  387|
+|       Canada|  249|
++-------------+-----+
+"""
+
+joinedDf\
+    .sort(F.col("country_population").cast("int").asc())\
+    .groupBy("country")\
+    .agg(\
+         F.count("city").alias("Cities"),\
+         F.sum(F.col("city_population").cast("int")).alias("urnab_pop"),\
+         F.max(F.col("city_population").cast("int")).alias("most_pop_in_one_city"),\
+         F.min(F.col("city_population").cast("int")).alias("min_pop_in_one_city"),\
+         F.avg(F.col("city_population").cast("int")).alias("avg_city_pop")\
+        )\
+    .sort(F.col("urnab_pop").desc())\
+    .limit(5)\
+    .show()
+"""
++-------------+------+---------+--------------------+-------------------+------------------+
+|      country|Cities|urnab_pop|most_pop_in_one_city|min_pop_in_one_city|      avg_city_pop|
++-------------+------+---------+--------------------+-------------------+------------------+
+|United States|  7328|390924051|            19354922|               1991|53346.622680131004|
+|        China|   392|358546021|            14987000|                100| 914658.2168367347|
+|        India|   212|204338075|            18978000|              10688| 963858.8443396227|
+|       Brazil|   387|127259225|            18845000|                956| 328835.2067183463|
+|        Japan|    69| 89712598|            35676000|              82335| 1300182.579710145|
++-------------+------+---------+--------------------+-------------------+------------------+
+"""
+```
+
+It is also important to mention that you can still join an aggregate like the one above with another DataFrame as it is also just a DataFrame.
+## Window Partitions
+
+## Other Spark Functions
+## User Defined Functions
+## Running raw SQL
+## Special Types
+# Resources.
+
+Here is a list of some very good resources on Spark Python API.
+- [Sparkbyexamples](https://sparkbyexamples.com/)
+- [Spark Python API Docs](https://spark.apache.org/docs/latest/api/python)
+- [DataBricks Introduction to Spark Window Functions](https://databricks.com/blog/2015/07/15/introducing-window-functions-in-spark-sql.html)
+- [Evan Heitman - TowardsDataScience Intro to Spark](https://towardsdatascience.com/a-neanderthals-guide-to-apache-spark-in-python-9ef1f156d427)
